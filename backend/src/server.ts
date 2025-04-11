@@ -1,11 +1,9 @@
-import express from "express"; // Explicitly import types
-import { Request, Response } from 'express';
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
+import express, { Request, Response } from "express";
 import cors from "cors";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import Database from "better-sqlite3";
 
 dotenv.config();
 
@@ -13,82 +11,81 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const dbPromise = open({
-    filename: "./users.db",
-    driver: sqlite3.Database,
-});
-
+// Initialize database
+const db = new Database("./users.db");
 
 // Create users table
-(async () => {
-    const db = await dbPromise;
-    await db.exec(`
+db.prepare(`
     CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL
-    );
-  `);
-})();
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL
+    )
+`).run();
+
+interface User {
+    id: number;
+    username: string;
+    email: string;
+    password: string;
+}
 
 // Register User
-app.post("/register", async (req, res) => {
+app.post("/register", (req: Request, res: Response) => {
     const { username, email, password } = req.body;
-    const db = await dbPromise;
 
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await db.run("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", [
-            username,
-            email,
-            hashedPassword,
-        ]);
+        const hashedPassword = bcrypt.hashSync(password, 10);
+        const stmt = db.prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
+        stmt.run(username, email, hashedPassword);
         res.json({ message: "User registered successfully!" });
     } catch (error) {
         res.status(400).json({ error: "Username or email already exists" });
     }
 });
-// Add this before /login
-app.post("/login", async (req, res) => {
-    const {email, password} = req.body;
-    console.log("Login attempt for:", email); // Log the email being tried
-    const db = await dbPromise;
+
+// Login User
+app.post("/login", (req: Request, res: Response) => {
+    const { email, password } = req.body;
+    console.log("Login attempt for:", email);
 
     try {
-        console.log("Try/catch");
-        const user = await db.get("SELECT * FROM users WHERE email = ?", [email]);
+        const stmt = db.prepare("SELECT * FROM users WHERE email = ?");
+        const user = stmt.get(email) as User;
 
         if (!user) {
             console.log("Email not found");
-            return res.status(400).json({error: "Invalid email or password"});
+            return res.status(400).json({ error: "Invalid email or password" });
         }
+
         console.log("Password being checked", password);
-        const isPasswordValid = await bcrypt.compare(password, user.password);
+        const isPasswordValid = bcrypt.compareSync(password, user.password);
 
         if (!isPasswordValid) {
             console.log("Password wrong");
-            return res.status(400).json({error: "Invalid email or password"});
+            return res.status(400).json({ error: "Invalid email or password" });
         }
 
-        // Create JWT token
-        const token = jwt.sign({id: user.id, username: user.username}, process.env.JWT_SECRET || "dev_secret", {
-            expiresIn: "1h",
-        });
+        const token = jwt.sign(
+            { id: user.id, username: user.username },
+            process.env.JWT_SECRET || "dev_secret",
+            { expiresIn: "1h" }
+        );
 
-        res.json({message: "Login successful", token});
+        res.json({ message: "Login successful", token });
     } catch (error) {
-        res.status(500).json({error: "Internal server error"});
+        console.error("Error during login:", error);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
-console.log("Didnt try/catch");
 
-app.get("/users", async (req, res) => {
-    const db = await dbPromise;
-    const users = await db.all("SELECT id, username, email FROM users");
+// Get all users (for testing)
+app.get("/users", (req: Request, res: Response) => {
+    const stmt = db.prepare("SELECT id, username, email FROM users");
+    const users = stmt.all();
     res.json(users);
 });
-
 
 // Start Server
 const PORT = process.env.PORT || 5001;
