@@ -14,16 +14,16 @@ function App() {
     return (
         <div className="App">
             <h1>Search for a Channel</h1>
-            <SearchBar onSearch={handleSearch} />
+            <SearchBar onSearch={handleSearch}/>
 
             {/* Register Component */}
-            <Register />
+            <Register/>
 
             {/* Login Component */}
-            <Login />
+            <Login/>
+            <img className="bottom-image" src="/Pewdiepie-Logo.png" alt="Pewdiepie Logo"/>
         </div>
     );
 }
-
 export default App;
 

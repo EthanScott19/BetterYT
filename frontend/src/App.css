@@ -39,3 +39,13 @@
     transform: rotate(360deg);
   }
 }
+
+.bottom-image {
+  position: relative;
+  bottom: 0;
+  left: -12%;
+  transform: translateY(50%);
+  width: 1000px;
+  height: 125px;
+  z-index: 999;
+}
